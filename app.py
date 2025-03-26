@@ -366,6 +366,6 @@ def handle_text_message(event):
             if save_reflection(question, text):
                 reply_text = "✨ 感謝分享你的反思，已記錄下來！"
             else:
-                reply_text = "
+                reply_text = ""
 
 
