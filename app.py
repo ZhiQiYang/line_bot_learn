@@ -367,6 +367,5 @@ def handle_text_message(event):
                 reply_text = "✨ 感謝分享你的反思，已記錄下來！"
             else:
                 reply_text = "
-ChatGPT 說：
-無法編輯
+
 
