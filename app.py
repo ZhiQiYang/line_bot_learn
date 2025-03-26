@@ -355,7 +355,8 @@ def handle_text_message(event):
             "• 反思：[內容] - 記錄你的反思\n"
             "• 設定計畫：{JSON格式} - 設定每日計畫"
         )
-    
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+
     else:
         # 將用戶的回覆視為對最近問題的回答
         data = load_data(REFLECTIONS_FILE)
