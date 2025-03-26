@@ -365,6 +365,10 @@ def handle_text_message(event):
             if save_reflection(question, text):
                 reply_text = "✨ 感謝分享你的反思，已記錄下來！"
             else:
-                reply_text = ""
-
-line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+                reply_text = "❌ 儲存反思失敗，請稍後再試"
+        else:
+            reply_text = "🤔 我不確定你想做什麼，請嘗試輸入「幫助」查看可用指令"
+    
+    # 確保回覆訊息不為空
+    if reply_text:
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
