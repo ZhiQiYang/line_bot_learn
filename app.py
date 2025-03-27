@@ -396,6 +396,8 @@ def handle_text_message(event):
     if reply_text:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 start_keep_alive_thread()
+import os
+
 if __name__ == "__main__":
-    # 啟動保活線程
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
