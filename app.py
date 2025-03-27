@@ -32,8 +32,14 @@ app = Flask(__name__)
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 USER_ID = os.environ.get('USER_ID')  # 要發送訊息的使用者 ID
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
+
+# 確保關鍵環境變數存在
+if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_CHANNEL_SECRET:
+    logger.warning("LINE API 密鑰未設置，機器人功能將受限")
+
+# 初始化 LINE Bot API
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN) if LINE_CHANNEL_ACCESS_TOKEN else None
+handler = WebhookHandler(LINE_CHANNEL_SECRET) if LINE_CHANNEL_SECRET else None
 
 # 儲存任務的檔案
 TASKS_FILE = 'tasks.json'
@@ -79,7 +85,6 @@ def init_files():
     })
     logger.info("資料檔案初始化完成")
 
-
 # 讀取資料
 def load_data(filename):
     try:
@@ -99,349 +104,127 @@ def save_data(filename, data):
         logger.error(f"儲存 {filename} 時發生錯誤: {e}")
         return False
 
-# 1. 修改任務結構，添加提醒相關字段
 # 添加任務
 def add_task(task_content, reminder_time=None):
-    conn = get_connection()
-    if not conn:
+    data = load_data(TASKS_FILE)
+    if not data:
         return False
     
-    try:
-        cursor = conn.cursor()
-        
-        # 插入新任務
-        cursor.execute(
-            '''
-            INSERT INTO tasks (content, reminder_time, progress) 
-            VALUES (%s, %s, %s)
-            ''',
-            (task_content, reminder_time, 0)
-        )
-        
-        conn.commit()
-        return True
+    now = datetime.datetime.now()
     
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"新增任務時發生錯誤: {e}")
-        return False
+    # 創建新任務
+    new_task = {
+        "content": task_content,
+        "created_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "completed": False,
+        "completed_at": None,
+        "reminder_time": reminder_time,
+        "last_reminded_at": None,
+        "progress": 0
+    }
     
-    finally:
-        conn.close()
+    # 添加到任務列表
+    data["tasks"].append(new_task)
+    
+    # 保存更新後的數據
+    return save_data(TASKS_FILE, data)
 
 # 獲取任務列表
 def get_tasks(completed=None):
-    conn = get_connection()
-    if not conn:
+    data = load_data(TASKS_FILE)
+    if not data:
         return []
     
-    try:
-        cursor = conn.cursor()
-        
-        if completed is None:
-            # 返回所有任務
-            cursor.execute("SELECT * FROM tasks ORDER BY created_at DESC")
-        else:
-            # 根據完成狀態過濾
-            cursor.execute(
-                "SELECT * FROM tasks WHERE completed = %s ORDER BY created_at DESC",
-                (completed,)
-            )
-        
-        return cursor.fetchall()
+    tasks = []
+    for task in data["tasks"]:
+        if completed is None or task["completed"] == completed:
+            tasks.append(task)
     
-    except Exception as e:
-        logger.error(f"獲取任務時發生錯誤: {e}")
-        return []
-    
-    finally:
-        conn.close()
+    # 按創建時間排序，最新的排在前面
+    return sorted(tasks, key=lambda x: x["created_at"], reverse=True)
 
 # 標記任務為已完成
 def complete_task(task_content):
-    conn = get_connection()
-    if not conn:
+    data = load_data(TASKS_FILE)
+    if not data:
         return False
     
-    try:
-        cursor = conn.cursor()
-        
-        # 更新任務狀態
-        cursor.execute(
-            '''
-            UPDATE tasks 
-            SET completed = TRUE, completed_at = CURRENT_TIMESTAMP 
-            WHERE content = %s AND completed = FALSE
-            ''',
-            (task_content,)
-        )
-        
-        affected_rows = cursor.rowcount
-        conn.commit()
-        
-        return affected_rows > 0
+    for task in data["tasks"]:
+        if task["content"] == task_content and not task["completed"]:
+            task["completed"] = True
+            task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            return save_data(TASKS_FILE, data)
     
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"完成任務時發生錯誤: {e}")
-        return False
-    
-    finally:
-        conn.close()
+    return False
 
 # 獲取今日任務完成率
 def get_today_progress():
-    conn = get_connection()
-    if not conn:
+    data = load_data(TASKS_FILE)
+    if not data:
         return 0, 0, 0
     
-    try:
-        cursor = conn.cursor()
-        
-        # 獲取今天創建的所有任務
-        cursor.execute(
-            "SELECT COUNT(*) as total FROM tasks WHERE DATE(created_at) = CURRENT_DATE"
-        )
-        total = cursor.fetchone()['total']
-        
-        if total == 0:
-            return 0, 0, 0
-        
-        # 獲取今天創建且已完成的任務
-        cursor.execute(
-            '''
-            SELECT COUNT(*) as completed 
-            FROM tasks 
-            WHERE DATE(created_at) = CURRENT_DATE AND completed = TRUE
-            '''
-        )
-        completed = cursor.fetchone()['completed']
-        
-        percentage = (completed / total) * 100
-        return completed, total, percentage
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    total = 0
+    completed = 0
     
-    except Exception as e:
-        logger.error(f"獲取進度時發生錯誤: {e}")
-        return 0, 0, 0
+    for task in data["tasks"]:
+        task_date = task["created_at"].split()[0]  # 只取日期部分
+        if task_date == today:
+            total += 1
+            if task["completed"]:
+                completed += 1
     
-    finally:
-        conn.close()
+    percentage = (completed / total * 100) if total > 0 else 0
+    return completed, total, percentage
 
 # 儲存反思內容
 def save_reflection(question, answer):
-    conn = get_connection()
-    if not conn:
+    data = load_data(REFLECTIONS_FILE)
+    if not data:
         return False
     
-    try:
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "INSERT INTO reflections (question, answer) VALUES (%s, %s)",
-            (question, answer)
-        )
-        
-        conn.commit()
-        return True
+    # 創建新反思
+    new_reflection = {
+        "question": question,
+        "answer": answer,
+        "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
     
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"儲存反思時發生錯誤: {e}")
-        return False
+    # 添加到反思列表
+    data["reflections"].append(new_reflection)
     
-    finally:
-        conn.close()
+    # 保存更新後的數據
+    return save_data(REFLECTIONS_FILE, data)
 
 # 獲取隨機問題
 def get_random_question(time_of_day):
-    conn = get_connection()
-    if not conn:
+    data = load_data(QUESTIONS_FILE)
+    if not data or time_of_day not in data or not data[time_of_day]:
         return None
     
-    try:
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT content FROM questions WHERE time_of_day = %s ORDER BY RANDOM() LIMIT 1",
-            (time_of_day,)
-        )
-        
-        result = cursor.fetchone()
-        return result['content'] if result else None
-    
-    except Exception as e:
-        logger.error(f"獲取問題時發生錯誤: {e}")
-        return None
-    
-    finally:
-        conn.close()
+    return random.choice(data[time_of_day])
 
 # 設定每日計畫
 def set_daily_plan(plan_data):
-    conn = get_connection()
-    if not conn:
+    data = load_data(TASKS_FILE)
+    if not data:
         return False
     
-    try:
-        cursor = conn.cursor()
-        
-        # 清除現有計畫
-        cursor.execute("DELETE FROM daily_plans")
-        
-        # 插入新計畫
-        for time_slot, content in plan_data.items():
-            cursor.execute(
-                "INSERT INTO daily_plans (time_slot, content) VALUES (%s, %s)",
-                (time_slot, content)
-            )
-        
-        conn.commit()
-        return True
+    # 更新每日計畫
+    data["daily_plan"] = plan_data
     
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"設定計畫時發生錯誤: {e}")
-        return False
-    
-    finally:
-        conn.close()
+    # 保存更新後的數據
+    return save_data(TASKS_FILE, data)
 
 # 獲取每日計畫
 def get_daily_plan():
-    conn = get_connection()
-    if not conn:
+    data = load_data(TASKS_FILE)
+    if not data:
         return {}
     
-    try:
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT time_slot, content FROM daily_plans")
-        
-        result = {}
-        for row in cursor.fetchall():
-            result[row['time_slot']] = row['content']
-        
-        return result
-    
-    except Exception as e:
-        logger.error(f"獲取計畫時發生錯誤: {e}")
-        return {}
-    
-    finally:
-        conn.close()
+    return data.get("daily_plan", {})
 
 # 設置任務提醒
-def set_task_reminder(task_content, reminder_time):
-    conn = get_connection()
-    if not conn:
-        return False
-    
-    try:
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            '''
-            UPDATE tasks 
-            SET reminder_time = %s 
-            WHERE content = %s AND completed = FALSE
-            ''',
-            (reminder_time, task_content)
-        )
-        
-        affected_rows = cursor.rowcount
-        conn.commit()
-        
-        return affected_rows > 0
-    
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"設置提醒時發生錯誤: {e}")
-        return False
-    
-    finally:
-        conn.close()
-
-# 發送任務提醒
-def send_task_reminder():
-    conn = get_connection()
-    if not conn:
-        return
-    
-    current_time = datetime.datetime.now().strftime("%H:%M")
-    
-    try:
-        cursor = conn.cursor()
-        
-        # 獲取需要提醒的任務
-        cursor.execute(
-            '''
-            SELECT id, content, created_at, progress
-            FROM tasks
-            WHERE completed = FALSE AND reminder_time = %s
-            ''',
-            (current_time,)
-        )
-        
-        tasks = cursor.fetchall()
-        
-        for task in tasks:
-            # 發送提醒
-            message = f"⏰ 任務提醒：「{task['content']}」\n"
-            
-            # 如果有進度信息，添加到提醒中
-            if task['progress'] > 0:
-                message += f"目前進度: {task['progress']}%\n"
-            
-            # 添加創建時間信息
-            created_date = task['created_at'].strftime("%Y-%m-%d")
-            message += f"(建立於 {created_date})"
-            
-            send_line_message(USER_ID, message)
-            
-            # 更新上次提醒時間
-            cursor.execute(
-                '''
-                UPDATE tasks
-                SET last_reminded_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-                ''',
-                (task['id'],)
-            )
-        
-        conn.commit()
-    
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"發送提醒時發生錯誤: {e}")
-    
-    finally:
-        conn.close()
-
-# 設置自我請求的時間間隔（秒）
-PING_INTERVAL = 840  # 14分鐘，略少於 Render 的 15 分鐘閒置限制
-
-# 你的 Render 應用 URL（從環境變數獲取或使用預設值）
-APP_URL = os.environ.get('APP_URL', 'https://line-bot-learn.onrender.com')
-
-def keep_alive():
-    """定期發送請求到自己的服務來保持活躍"""
-    while True:
-        try:
-            response = requests.get(APP_URL)
-            logger.info(f"Keep-alive ping sent. Response: {response.status_code}")
-        except Exception as e:
-            logger.error(f"Keep-alive ping failed: {e}")
-        
-        # 等待到下一次 ping
-        time.sleep(PING_INTERVAL)
-
-# 在主應用啟動時啟動保活線程
-def start_keep_alive_thread():
-    keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
-    keep_alive_thread.start()
-    logger.info("Keep-alive thread started")
-
-# 2. 添加設置任務提醒的函數
 def set_task_reminder(task_content, reminder_time):
     data = load_data(TASKS_FILE)
     if not data:
@@ -454,7 +237,123 @@ def set_task_reminder(task_content, reminder_time):
     
     return False
 
-# 3. 添加發送任務提醒的函數
+# 發送LINE訊息
+def send_line_message(user_id, message):
+    if not line_bot_api:
+        logger.error("LINE Bot API 未初始化，無法發送訊息")
+        return False
+    
+    try:
+        line_bot_api.push_message(user_id, TextSendMessage(text=message))
+        return True
+    except Exception as e:
+        logger.error(f"發送訊息失敗: {e}")
+        return False
+
+# 創建任務列表 Flex 訊息
+def create_task_list_flex_message(tasks):
+    if not tasks:
+        return TextSendMessage(text="📝 目前沒有未完成的任務")
+    
+    # 創建 Flex 訊息格式
+    bubble = BubbleContainer(
+        header=BoxComponent(
+            layout="vertical",
+            contents=[
+                TextComponent(text="未完成任務列表", weight="bold", size="xl")
+            ]
+        ),
+        body=BoxComponent(
+            layout="vertical",
+            contents=[]
+        )
+    )
+    
+    # 添加每個任務
+    for i, task in enumerate(tasks):
+        if i > 0:
+            # 添加分隔線
+            bubble.body.contents.append(SeparatorComponent())
+        
+        # 任務內容組件
+        task_box = BoxComponent(
+            layout="vertical",
+            margin="md",
+            contents=[
+                TextComponent(
+                    text=task["content"], 
+                    size="md", 
+                    wrap=True
+                )
+            ]
+        )
+        
+        # 如果有提醒時間，添加顯示
+        if task.get("reminder_time"):
+            task_box.contents.append(
+                TextComponent(
+                    text=f"⏰ {task['reminder_time']}", 
+                    size="sm", 
+                    color="#888888"
+                )
+            )
+        
+        # 添加創建時間
+        created_date = task["created_at"].split()[0]  # 只取日期部分
+        task_box.contents.append(
+            TextComponent(
+                text=f"創建於: {created_date}", 
+                size="xs", 
+                color="#aaaaaa"
+            )
+        )
+        
+        # 添加操作按鈕
+        actions_box = BoxComponent(
+            layout="horizontal",
+            margin="md",
+            contents=[
+                ButtonComponent(
+                    action=MessageAction(
+                        label="標記完成",
+                        text=f"完成：{task['content']}"
+                    ),
+                    style="primary",
+                    height="sm"
+                ),
+                ButtonComponent(
+                    action=MessageAction(
+                        label="設置提醒",
+                        text=f"提醒：{task['content']}="
+                    ),
+                    style="secondary",
+                    margin="md",
+                    height="sm"
+                )
+            ]
+        )
+        
+        task_box.contents.append(actions_box)
+        bubble.body.contents.append(task_box)
+    
+    # 創建 Flex 訊息
+    return FlexSendMessage(
+        alt_text="未完成任務列表",
+        contents=bubble
+    )
+
+# 發送思考問題
+def send_thinking_question(user_id, time_of_day):
+    question = get_random_question(time_of_day)
+    if not question:
+        logger.error(f"無法獲取 {time_of_day} 反思問題")
+        return
+    
+    time_label = "早晨" if time_of_day == "morning" else "晚間"
+    message = f"📝 {time_label}反思問題：\n\n{question}\n\n請回覆你的想法。"
+    send_line_message(user_id, message)
+
+# 發送任務提醒
 def send_task_reminder():
     now = datetime.datetime.now()
     current_time = now.strftime("%H:%M")
@@ -485,13 +384,37 @@ def send_task_reminder():
     # 儲存更新後的任務數據
     save_data(TASKS_FILE, data)
 
-# 4. 修改排程任務，添加定時檢查
+# 設置自我請求的時間間隔（秒）
+PING_INTERVAL = 840  # 14分鐘，略少於 Render 的 15 分鐘閒置限制
+
+# 你的 Render 應用 URL（從環境變數獲取或使用預設值）
+APP_URL = os.environ.get('APP_URL', 'https://line-bot-learn.onrender.com')
+
+def keep_alive():
+    """定期發送請求到自己的服務來保持活躍"""
+    while True:
+        try:
+            response = requests.get(APP_URL)
+            logger.info(f"Keep-alive ping sent. Response: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Keep-alive ping failed: {e}")
+        
+        # 等待到下一次 ping
+        time.sleep(PING_INTERVAL)
+
+# 在主應用啟動時啟動保活線程
+def start_keep_alive_thread():
+    keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+    keep_alive_thread.start()
+    logger.info("Keep-alive thread started")
+
+# 排程任務
 def schedule_jobs():
-    # 原有的早晚定時發送問題
+    # 早晚定時發送問題
     schedule.every().day.at("07:00").do(lambda: send_thinking_question(USER_ID, "morning"))
     schedule.every().day.at("21:00").do(lambda: send_thinking_question(USER_ID, "evening"))
     
-    # 添加每分鐘檢查任務提醒
+    # 每分鐘檢查任務提醒
     schedule.every(1).minutes.do(send_task_reminder)
     
     # 執行排程任務的線程
@@ -503,6 +426,11 @@ def schedule_jobs():
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
     logger.info("排程任務已啟動")
+
+# 初始化資料庫（在這個版本中實際上是初始化檔案）
+def init_db():
+    init_files()
+    logger.info("資料初始化完成")
 
 # 新增測試路由
 @app.route("/ping", methods=['GET'])
@@ -517,6 +445,9 @@ def health_check():
 # Flask 路由
 @app.route("/callback", methods=['POST'])
 def callback():
+    if not handler:
+        abort(500)
+    
     # 嘗試獲取簽名，如果不存在則設為空字串
     signature = request.headers.get('X-Line-Signature', '')
     
@@ -697,11 +628,11 @@ def handle_text_message(event):
     # 確保回覆訊息不為空
     if reply_text:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
-        
+
 if __name__ == "__main__":
-    # 初始化文件
-    logger.info("正在初始化資料檔案...")
-    init_files()
+    # 初始化資料庫（文件）
+    logger.info("正在初始化資料...")
+    init_db()
     
     # 啟動排程任務
     logger.info("正在啟動排程任務...")
