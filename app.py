@@ -270,7 +270,7 @@ def create_task_list_flex_message(tasks):
 PING_INTERVAL = 840  # 14分鐘，略少於 Render 的 15 分鐘閒置限制
 
 # 你的 Render 應用 URL（請替換為你的實際網址）
-APP_URL = "https://你的應用名稱.onrender.com"
+APP_URL = "https://line-bot-learn.onrender.com"
 
 def keep_alive():
     """定期發送請求到自己的服務來保持活躍"""
