@@ -366,19 +366,31 @@ def handle_text_message(event):
         completed, total, percentage = get_today_progress()
         reply_text = f"📊 今日任務進度：\n完成 {completed}/{total} 項任務\n完成率：{percentage:.1f}%"
     
-    elif text.startswith("反思：") or text.startswith("反思:"):
-        # 假設這是對早上或晚上問題的回答
-        answer = text[3:].strip()
-        
-        # 這裡我們暫時不知道問題是什麼，所以使用時間來猜測
-        current_hour = datetime.datetime.now().hour
-        time_of_day = "morning" if 5 <= current_hour < 12 else "evening"
-        question = get_random_question(time_of_day)  # 這只是一個佔位符
-        
-        if save_reflection(question, answer):
-            reply_text = "✨ 感謝分享你的反思，已記錄下來！"
-        else:
-            reply_text = "❌ 儲存反思失敗，請稍後再試"
+    elif text == "反思":
+    # 當使用者只輸入「反思」時，提供一個隨機反思問題
+    current_hour = datetime.datetime.now().hour
+    time_of_day = "morning" if 5 <= current_hour < 12 else "evening"
+    question = get_random_question(time_of_day)
+    
+    if question:
+        reply_text = f"📝 反思問題：\n\n{question}\n\n請回覆你的想法，或使用「反思：[內容]」格式記錄你的反思。"
+    else:
+        reply_text = "抱歉，無法獲取反思問題，請稍後再試。"
+
+elif text.startswith("反思：") or text.startswith("反思:"):
+    # 處理使用者直接提供的反思內容
+    answer = text[3:].strip()
+    
+    # 獲取適合當前時間的問題類型
+    current_hour = datetime.datetime.now().hour
+    time_of_day = "morning" if 5 <= current_hour < 12 else "evening"
+    question = get_random_question(time_of_day)
+    
+    if save_reflection(question, answer):
+        reply_text = "✨ 感謝分享你的反思，已記錄下來！"
+    else:
+        reply_text = "❌ 儲存反思失敗，請稍後再試"
+
     
     elif text.startswith("設定計畫：") or text.startswith("設定計畫:"):
         try:
