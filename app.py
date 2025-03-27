@@ -6,6 +6,7 @@ import datetime
 import threading
 import logging
 import requests
+import re
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -98,8 +99,8 @@ def save_data(filename, data):
         logger.error(f"儲存 {filename} 時發生錯誤: {e}")
         return False
 
-# 處理新增任務
-def add_task(task_content):
+# 1. 修改任務結構，添加提醒相關字段
+def add_task(task_content, reminder_time=None):
     data = load_data(TASKS_FILE)
     if not data:
         return False
@@ -110,7 +111,10 @@ def add_task(task_content):
         "content": task_content,
         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "completed": False,
-        "completed_at": None
+        "completed_at": None,
+        "progress": 0,
+        "reminder_time": reminder_time,  # 格式: "HH:MM" 或 None
+        "last_reminded_at": None  # 上次提醒時間
     }
     
     data["tasks"].append(new_task)
@@ -255,15 +259,21 @@ def create_task_list_flex_message(tasks):
     # 任務列表
     for i, task in enumerate(tasks):
         status = "✅" if task["completed"] else "⬜"
+        
+        # 添加提醒時間和進度信息
+        reminder_info = f" ⏰{task['reminder_time']}" if task.get('reminder_time') else ""
+        progress_info = f" ({task.get('progress', 0)}%)" if task.get('progress', 0) > 0 else ""
+        
         contents.append(BoxComponent(
             layout="horizontal",
             margin="md",
             contents=[
                 TextComponent(
-                    text=f"{status} {task['content']}",
+                    text=f"{status} {task['content']}{reminder_info}{progress_info}",
                     size="md",
                     color="#555555",
-                    flex=5
+                    flex=5,
+                    wrap=True
                 )
             ]
         ))
@@ -305,11 +315,58 @@ def start_keep_alive_thread():
     keep_alive_thread.start()
     logger.info("Keep-alive thread started")
 
-# 設置排程任務
+# 2. 添加設置任務提醒的函數
+def set_task_reminder(task_content, reminder_time):
+    data = load_data(TASKS_FILE)
+    if not data:
+        return False
+    
+    for task in data["tasks"]:
+        if task["content"] == task_content and not task["completed"]:
+            task["reminder_time"] = reminder_time
+            return save_data(TASKS_FILE, data)
+    
+    return False
+
+# 3. 添加發送任務提醒的函數
+def send_task_reminder():
+    now = datetime.datetime.now()
+    current_time = now.strftime("%H:%M")
+    
+    data = load_data(TASKS_FILE)
+    if not data:
+        return
+    
+    # 檢查每個未完成的任務，看是否需要提醒
+    for task in data["tasks"]:
+        if not task["completed"] and task.get("reminder_time") == current_time:
+            # 發送提醒
+            message = f"⏰ 任務提醒：「{task['content']}」\n"
+            
+            # 如果有進度信息，添加到提醒中
+            if task.get("progress", 0) > 0:
+                message += f"目前進度: {task['progress']}%\n"
+            
+            # 添加創建時間信息
+            created_date = task["created_at"].split()[0]  # 只取日期部分
+            message += f"(建立於 {created_date})"
+            
+            send_line_message(USER_ID, message)
+            
+            # 更新上次提醒時間
+            task["last_reminded_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # 儲存更新後的任務數據
+    save_data(TASKS_FILE, data)
+
+# 4. 修改排程任務，添加定時檢查
 def schedule_jobs():
-    # 設置早晚定時發送問題
+    # 原有的早晚定時發送問題
     schedule.every().day.at("07:00").do(lambda: send_thinking_question(USER_ID, "morning"))
     schedule.every().day.at("21:00").do(lambda: send_thinking_question(USER_ID, "evening"))
+    
+    # 添加每分鐘檢查任務提醒
+    schedule.every(1).minutes.do(send_task_reminder)
     
     # 執行排程任務的線程
     def run_scheduler():
@@ -348,7 +405,6 @@ def callback():
     return 'OK'
 
 # 處理文字訊息
-# 處理文字訊息 - 修復縮排問題
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
     text = event.message.text.strip()
@@ -356,9 +412,30 @@ def handle_text_message(event):
     
     # 指令處理
     if text.startswith("新增：") or text.startswith("新增:"):
-        task_content = text[3:].strip()
-        if add_task(task_content):
-            reply_text = f"✅ 已新增任務：{task_content}"
+        content = text[3:].strip()
+        
+        # 檢查是否有提醒時間設置（格式：任務內容 @HH:MM）
+        reminder_time = None
+        if " @" in content:
+            content_parts = content.split(" @")
+            task_content = content_parts[0].strip()
+            time_part = content_parts[1].strip()
+            
+            # 驗證時間格式
+            if re.match(r'^\d{1,2}:\d{2}$', time_part):
+                reminder_time = time_part
+            else:
+                reply_text = "❌ 時間格式錯誤，請使用 HH:MM 格式（例如 08:30）"
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+                return
+        else:
+            task_content = content
+        
+        if add_task(task_content, reminder_time):
+            if reminder_time:
+                reply_text = f"✅ 已新增任務：{task_content}，將在每天 {reminder_time} 提醒"
+            else:
+                reply_text = f"✅ 已新增任務：{task_content}"
         else:
             reply_text = "❌ 新增任務失敗，請稍後再試"
     
@@ -368,6 +445,25 @@ def handle_text_message(event):
             reply_text = f"🎉 恭喜完成任務：{task_content}"
         else:
             reply_text = "❌ 找不到該未完成任務，請確認任務名稱"
+    
+    elif text.startswith("提醒：") or text.startswith("提醒:"):
+        # 格式：提醒：任務內容=08:30
+        parts = text[3:].strip().split('=')
+        
+        if len(parts) != 2:
+            reply_text = "❌ 格式錯誤，請使用「提醒：任務內容=HH:MM」的格式"
+        else:
+            task_content = parts[0].strip()
+            reminder_time = parts[1].strip()
+            
+            # 簡單驗證時間格式
+            if re.match(r'^\d{1,2}:\d{2}$', reminder_time):
+                if set_task_reminder(task_content, reminder_time):
+                    reply_text = f"⏰ 已設置對任務「{task_content}」的提醒時間為 {reminder_time}"
+                else:
+                    reply_text = "❌ 找不到該未完成任務，請確認任務名稱"
+            else:
+                reply_text = "❌ 時間格式錯誤，請使用 HH:MM 格式（例如 08:30）"
     
     elif text == "查詢任務":
         tasks = get_tasks(completed=False)
@@ -421,7 +517,9 @@ def handle_text_message(event):
         reply_text = (
             "📌 指令說明：\n"
             "• 新增：[任務內容] - 新增一項任務\n"
+            "• 新增：[任務內容] @HH:MM - 新增帶提醒的任務\n"
             "• 完成：[任務內容] - 標記任務為已完成\n"
+            "• 提醒：[任務內容]=HH:MM - 設置任務的提醒時間\n"
             "• 查詢任務 - 檢視所有未完成任務\n"
             "• 今日進度 - 查看今日任務完成率\n"
             "• 反思 - 獲取一個反思問題\n"
@@ -429,14 +527,16 @@ def handle_text_message(event):
             "• 設定計畫：{JSON格式} - 設定每日計畫\n"
             "• 模板 - 獲取可複製的功能模板"
         )
-    
+
     elif text == "模板":
         reply_text = (
             "📝 LINE Bot 功能模板集\n"
             "複製後修改 [參數] 即可使用\n\n"
             "==== 任務管理 ====\n"
             "新增：[任務內容]\n"
+            "新增：[任務內容] @08:30\n"
             "完成：[任務內容]\n"
+            "提醒：[任務內容]=08:30\n"
             "查詢任務\n"
             "今日進度\n\n"
             
