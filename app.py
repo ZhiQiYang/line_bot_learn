@@ -5,6 +5,7 @@ import random
 import datetime
 import threading
 import logging
+import requests
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -30,7 +31,6 @@ app = Flask(__name__)
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 USER_ID = os.environ.get('USER_ID')  # 要發送訊息的使用者 ID
-
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
@@ -266,6 +266,29 @@ def create_task_list_flex_message(tasks):
     )
     
     return FlexSendMessage(alt_text="任務清單", contents=bubble)
+# 設置自我請求的時間間隔（秒）
+PING_INTERVAL = 840  # 14分鐘，略少於 Render 的 15 分鐘閒置限制
+
+# 你的 Render 應用 URL（請替換為你的實際網址）
+APP_URL = "https://你的應用名稱.onrender.com"
+
+def keep_alive():
+    """定期發送請求到自己的服務來保持活躍"""
+    while True:
+        try:
+            response = requests.get(APP_URL)
+            logger.info(f"Keep-alive ping sent. Response: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Keep-alive ping failed: {e}")
+        
+        # 等待到下一次 ping
+        time.sleep(PING_INTERVAL)
+
+# 在主應用啟動時啟動保活線程
+def start_keep_alive_thread():
+    keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+    keep_alive_thread.start()
+    logger.info("Keep-alive thread started")
 
 # 健康檢查路由
 @app.route("/", methods=['GET'])
@@ -372,3 +395,8 @@ def handle_text_message(event):
     # 確保回覆訊息不為空
     if reply_text:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+
+if __name__ == "__main__":
+    # 啟動保活線程
+    start_keep_alive_thread()
+    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
