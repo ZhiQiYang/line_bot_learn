@@ -46,24 +46,26 @@ def ensure_file_exists(filename, default_content):
             json.dump(default_content, file, ensure_ascii=False, indent=2)
 
 # 初始化資料檔案
-ensure_file_exists(TASKS_FILE, {"tasks": [], "daily_plan": {}})
-ensure_file_exists(REFLECTIONS_FILE, {"reflections": []})
-ensure_file_exists(QUESTIONS_FILE, {
-    "morning": [
-        "今天你最重要的一件事是什麼？",
-        "你希望今天結束時能完成什麼？",
-        "今天有什麼可能讓你分心的事情？你要如何應對？",
-        "你今天最期待什麼事情？",
-        "如果今天只能完成一件事，你會選擇做什麼？"
-    ],
-    "evening": [
-        "今天你完成了什麼有意義的事？",
-        "你今天遇到最大的阻力是什麼？",
-        "今天有什麼事情讓你感到開心或有成就感？",
-        "明天你想要改進什麼？",
-        "今天你學到了什麼？"
-    ]
-})
+def init_files():
+    ensure_file_exists(TASKS_FILE, {"tasks": [], "daily_plan": {}})
+    ensure_file_exists(REFLECTIONS_FILE, {"reflections": []})
+    ensure_file_exists(QUESTIONS_FILE, {
+        "morning": [
+            "今天你最重要的一件事是什麼？",
+            "你希望今天結束時能完成什麼？",
+            "今天有什麼可能讓你分心的事情？你要如何應對？",
+            "你今天最期待什麼事情？",
+            "如果今天只能完成一件事，你會選擇做什麼？"
+        ],
+        "evening": [
+            "今天你完成了什麼有意義的事？",
+            "你今天遇到最大的阻力是什麼？",
+            "今天有什麼事情讓你感到開心或有成就感？",
+            "明天你想要改進什麼？",
+            "今天你學到了什麼？"
+        ]
+    })
+    logger.info("資料檔案初始化完成")
 
 # 讀取資料
 def load_data(filename):
@@ -266,11 +268,12 @@ def create_task_list_flex_message(tasks):
     )
     
     return FlexSendMessage(alt_text="任務清單", contents=bubble)
+
 # 設置自我請求的時間間隔（秒）
 PING_INTERVAL = 840  # 14分鐘，略少於 Render 的 15 分鐘閒置限制
 
-# 你的 Render 應用 URL（請替換為你的實際網址）
-APP_URL = "https://line-bot-learn.onrender.com"
+# 你的 Render 應用 URL（從環境變數獲取或使用預設值）
+APP_URL = os.environ.get('APP_URL', 'https://line-bot-learn.onrender.com')
 
 def keep_alive():
     """定期發送請求到自己的服務來保持活躍"""
@@ -290,6 +293,27 @@ def start_keep_alive_thread():
     keep_alive_thread.start()
     logger.info("Keep-alive thread started")
 
+# 設置排程任務
+def schedule_jobs():
+    # 設置早晚定時發送問題
+    schedule.every().day.at("07:00").do(lambda: send_thinking_question(USER_ID, "morning"))
+    schedule.every().day.at("21:00").do(lambda: send_thinking_question(USER_ID, "evening"))
+    
+    # 執行排程任務的線程
+    def run_scheduler():
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
+    
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
+    logger.info("排程任務已啟動")
+
+# 新增測試路由
+@app.route("/ping", methods=['GET'])
+def ping():
+    return "pong!", 200
+
 # 健康檢查路由
 @app.route("/", methods=['GET'])
 def health_check():
@@ -298,7 +322,8 @@ def health_check():
 # Flask 路由
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    # 嘗試獲取簽名，如果不存在則設為空字串
+    signature = request.headers.get('X-Line-Signature', '')
     
     body = request.get_data(as_text=True)
     app.logger.info("Request body: " + body)
@@ -395,24 +420,23 @@ def handle_text_message(event):
     # 確保回覆訊息不為空
     if reply_text:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
-start_keep_alive_thread()
-import os
-
-# 修改主程序运行部分，确保正确绑定到 Render 指定的端口
 
 if __name__ == "__main__":
-    # 初始化数据库
-    init_db()
+    # 初始化文件
+    logger.info("正在初始化資料檔案...")
+    init_files()
     
-    # 启动定时任务
+    # 啟動排程任務
+    logger.info("正在啟動排程任務...")
     schedule_jobs()
     
-    # 启动保活线程
+    # 啟動保活線程
+    logger.info("正在啟動保活線程...")
     start_keep_alive_thread()
     
-    # 获取 Render 指定的端口
+    # 獲取 Render 指定的端口
     port = int(os.environ.get('PORT', 8080))
     
-    # 确保正确绑定到指定端口，并打印日志以便调试
-    logger.info(f"Starting application on port {port}")
+    # 確保正確綁定到指定端口，並打印日誌以便調試
+    logger.info(f"正在啟動應用於端口 {port}...")
     app.run(host='0.0.0.0', port=port, debug=False)
