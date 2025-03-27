@@ -1,8 +1,4 @@
-def init_files():
-    ensure_file_exists(TASKS_FILE, {"tasks": [], "daily_plan": {}})
-    ensure_file_exists(REFLECTIONS_FILE, {"reflections": []})
-    ensure_file_exists(QUESTIONS_FILE, {
-        "morning": [
+
             "今天你最重要的一件事是什麼？",
             "你希望今天結束時能完成什麼？",
             "今天有什麼可能讓你分心的事情？你要如何應對？",
@@ -28,4 +24,4 @@ def init_files():
             "如果可以給一年前的自己一個建議，你會說什麼？"
         ]
     })
-    logger.info("資料檔案初始化完成")
+    
