@@ -398,6 +398,21 @@ def handle_text_message(event):
 start_keep_alive_thread()
 import os
 
+# 修改主程序运行部分，确保正确绑定到 Render 指定的端口
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    # 初始化数据库
+    init_db()
+    
+    # 启动定时任务
+    schedule_jobs()
+    
+    # 启动保活线程
+    start_keep_alive_thread()
+    
+    # 获取 Render 指定的端口
+    port = int(os.environ.get('PORT', 8080))
+    
+    # 确保正确绑定到指定端口，并打印日志以便调试
+    logger.info(f"Starting application on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
