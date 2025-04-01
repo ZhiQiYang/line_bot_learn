@@ -451,16 +451,13 @@ def ping():
 # 健康檢查路由
 @app.route("/", methods=['GET'])
 def health_check():
-    return "LINE Bot is running!", 200
+    return "Learning LINE Bot is running!", 200
 
 # 時區檢查路由
 @app.route("/timezone", methods=['GET'])
 def timezone_check():
-    now_utc = datetime.datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S %Z")
-    now_local = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z")
-    now_taipei = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %Z")
-    
-    return f"UTC時間: {now_utc}\n系統時間: {now_local}\n台灣時間: {now_taipei}", 200
+    now = datetime.datetime.now(TIMEZONE)
+    return f"當前時間: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}", 200
 
 # Flask 路由
 @app.route("/callback", methods=['POST'])
@@ -487,289 +484,8 @@ def handle_text_message(event):
     text = event.message.text.strip()
     user_id = event.source.user_id
     
-    # 指令處理
-    if text == "新增任務表單":
-        flex_message = FlexSendMessage(
-            alt_text="新增任務",
-            contents={
-                "type": "bubble",
-                "header": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "新增任務",
-                            "weight": "bold",
-                            "size": "xl",
-                            "color": "#000000"
-                        }
-                    ]
-                },
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "請選擇想要創建的任務類型",
-                            "wrap": True
-                        }
-                    ]
-                },
-                "footer": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "spacing": "sm",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "message",
-                                "label": "一般任務",
-                                "text": "新增：[在此輸入任務內容]"
-                            },
-                            "style": "primary"
-                        },
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "message",
-                                "label": "定時提醒任務",
-                                "text": "新增：[在此輸入任務內容] @08:00"
-                            },
-                            "style": "secondary",
-                            "margin": "md"
-                        }
-                    ]
-                }
-            }
-        )
-        line_bot_api.reply_message(event.reply_token, flex_message)
-        return
-        
-    elif text == "設定計畫表單":
-        flex_message = FlexSendMessage(
-            alt_text="設定每日計畫",
-            contents={
-                "type": "bubble",
-                "header": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "設定每日計畫",
-                            "weight": "bold",
-                            "size": "xl",
-                            "color": "#000000"
-                        }
-                    ]
-                },
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "請選擇計畫模板或自行輸入",
-                            "wrap": True
-                        }
-                    ]
-                },
-                "footer": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "spacing": "sm",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "message",
-                                "label": "基本日程模板",
-                                "text": "設定計畫：{\"早上\":\"晨間閱讀\",\"中午\":\"午餐後散步\",\"下午\":\"工作/學習\",\"晚上\":\"反思與計劃\"}"
-                            },
-                            "style": "primary"
-                        },
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "message",
-                                "label": "學習日程模板",
-                                "text": "設定計畫：{\"早上\":\"重點科目學習\",\"中午\":\"複習筆記\",\"下午\":\"練習題\",\"晚上\":\"總結今日所學\"}"
-                            },
-                            "style": "secondary",
-                            "margin": "md"
-                        }
-                    ]
-                }
-            }
-        )
-        line_bot_api.reply_message(event.reply_token, flex_message)
-        return
-    
-    elif text.startswith("新增：") or text.startswith("新增:"):
-        content = text[3:].strip()
-        
-        # 檢查是否有提醒時間設置（格式：任務內容 @HH:MM）
-        reminder_time = None
-        if " @" in content:
-            content_parts = content.split(" @")
-            task_content = content_parts[0].strip()
-            time_part = content_parts[1].strip()
-            
-            # 驗證時間格式
-            if re.match(r'^\d{1,2}:\d{2}$', time_part):
-                reminder_time = time_part
-            else:
-                reply_text = "❌ 時間格式錯誤，請使用 HH:MM 格式（例如 08:30）"
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
-                return
-        else:
-            task_content = content
-        
-        if add_task(task_content, reminder_time):
-            if reminder_time:
-                reply_text = f"✅ 已新增任務：{task_content}，將在每天 {reminder_time} 提醒"
-            else:
-                reply_text = f"✅ 已新增任務：{task_content}"
-        else:
-            reply_text = "❌ 新增任務失敗，請稍後再試"
-    
-    elif text.startswith("完成：") or text.startswith("完成:"):
-        task_content = text[3:].strip()
-        if complete_task(task_content):
-            reply_text = f"🎉 恭喜完成任務：{task_content}"
-        else:
-            reply_text = "❌ 找不到該未完成任務，請確認任務名稱"
-    
-    elif text.startswith("提醒：") or text.startswith("提醒:"):
-        # 格式：提醒：任務內容=08:30
-        parts = text[3:].strip().split('=')
-        
-        if len(parts) != 2:
-            reply_text = "❌ 格式錯誤，請使用「提醒：任務內容=HH:MM」的格式"
-        else:
-            task_content = parts[0].strip()
-            reminder_time = parts[1].strip()
-            
-            # 簡單驗證時間格式
-            if re.match(r'^\d{1,2}:\d{2}$', reminder_time):
-                if set_task_reminder(task_content, reminder_time):
-                    reply_text = f"⏰ 已設置對任務「{task_content}」的提醒時間為 {reminder_time}"
-                else:
-                    reply_text = "❌ 找不到該未完成任務，請確認任務名稱"
-            else:
-                reply_text = "❌ 時間格式錯誤，請使用 HH:MM 格式（例如 08:30）"
-    
-    elif text == "查詢任務":
-        tasks = get_tasks(completed=False)
-        message = create_task_list_flex_message(tasks)
-        line_bot_api.reply_message(event.reply_token, message)
-        return
-    
-    elif text == "今日進度":
-        completed, total, percentage = get_today_progress()
-        reply_text = f"📊 今日任務進度：\n完成 {completed}/{total} 項任務\n完成率：{percentage:.1f}%"
-    
-    elif text == "反思":
-        # 當使用者只輸入「反思」時，提供一個隨機反思問題
-        current_hour = datetime.datetime.now(TIMEZONE).hour
-        time_of_day = "morning" if 5 <= current_hour < 12 else "evening"
-        question = get_random_question(time_of_day)
-        
-        if question:
-            reply_text = f"📝 反思問題：\n\n{question}\n\n請回覆你的想法，或使用「反思：[內容]」格式記錄你的反思。"
-        else:
-            reply_text = "抱歉，無法獲取反思問題，請稍後再試。"
-
-    elif text.startswith("反思：") or text.startswith("反思:"):
-        # 處理使用者直接提供的反思內容
-        answer = text[3:].strip()
-        
-        # 獲取適合當前時間的問題類型
-        current_hour = datetime.datetime.now(TIMEZONE).hour
-        time_of_day = "morning" if 5 <= current_hour < 12 else "evening"
-        question = get_random_question(time_of_day)
-        
-        if save_reflection(question, answer):
-            reply_text = "✨ 感謝分享你的反思，已記錄下來！"
-        else:
-            reply_text = "❌ 儲存反思失敗，請稍後再試"
-    
-    elif text.startswith("設定計畫：") or text.startswith("設定計畫:"):
-        try:
-            # 格式：設定計畫：{"早上":"晨間閱讀","中午":"午餐後散步","晚上":"復盤一天"}
-            plan_str = text[5:].strip()
-            plan_data = json.loads(plan_str)
-            
-            if set_daily_plan(plan_data):
-                reply_text = "📅 每日計畫已更新！"
-            else:
-                reply_text = "❌ 更新計畫失敗，請稍後再試"
-        except json.JSONDecodeError:
-            reply_text = "❌ 計畫格式錯誤，請使用正確的 JSON 格式"
-    
-    elif text == "幫助" or text == "help":
-        reply_text = (
-            "📌 指令說明：\n"
-            "• 新增：[任務內容] - 新增一項任務\n"
-            "• 新增：[任務內容] @HH:MM - 新增帶提醒的任務\n"
-            "• 完成：[任務內容] - 標記任務為已完成\n"
-            "• 提醒：[任務內容]=HH:MM - 設置任務的提醒時間\n"
-            "• 查詢任務 - 檢視所有未完成任務\n"
-            "• 今日進度 - 查看今日任務完成率\n"
-            "• 反思 - 獲取一個反思問題\n"
-            "• 反思：[內容] - 記錄你的反思\n"
-            "• 設定計畫：{JSON格式} - 設定每日計畫\n"
-            "• 新增任務表單 - 開啟任務新增界面\n"
-            "• 設定計畫表單 - 開啟計畫設定界面\n"
-            "• 模板 - 獲取可複製的功能模板"
-        )
-
-    elif text == "模板":
-        reply_text = (
-            "📝 LINE Bot 功能模板集\n"
-            "複製後修改 [參數] 即可使用\n\n"
-            "==== 任務管理 ====\n"
-            "新增：[任務內容]\n"
-            "新增：[任務內容] @08:30\n"
-            "完成：[任務內容]\n"
-            "提醒：[任務內容]=08:30\n"
-            "查詢任務\n"
-            "今日進度\n\n"
-            
-            "==== 反思系統 ====\n"
-            "反思\n"
-            "反思：[反思內容]\n\n"
-            
-            "==== 計畫管理 ====\n"
-            "設定計畫：{\"早上\":\"[活動]\",\"中午\":\"[活動]\",\"下午\":\"[活動]\",\"晚上\":\"[活動]\"}\n\n"
-            
-            "==== 簡化計畫 ====\n"
-            "設定計畫：{\"[時間]\":\"[活動]\"}\n\n"
-            
-            "==== 其他功能 ====\n"
-            "幫助\n"
-        )
-    
-    else:
-        # 將用戶的回覆視為對最近問題的回答
-        data = load_data(REFLECTIONS_FILE)
-        if data and data["reflections"]:
-            last_reflection = data["reflections"][-1]
-            question = last_reflection["question"]
-            
-            if save_reflection(question, text):
-                reply_text = "✨ 感謝分享你的反思，已記錄下來！"
-            else:
-                reply_text = "❌ 儲存反思失敗，請稍後再試"
-        else:
-            reply_text = "🤔 我不確定你想做什麼，請嘗試輸入「幫助」查看可用指令"
-    
-    # 確保回覆訊息不為空
-    if reply_text:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+    # 將文本消息轉發到統一路由處理器
+    process_message(line_bot_api, text, user_id, event.reply_token)
 
 # 創建Rich Menu
 def create_rich_menu():
@@ -885,6 +601,66 @@ def create_rich_menu_image():
     except Exception as e:
         logger.error(f"創建Rich Menu圖片時發生錯誤: {e}")
         return None
+
+# 路由處理函數 - 臨時實現
+def process_message(line_bot_api, text, user_id, reply_token):
+    # 根據消息前綴決定使用哪個模組處理
+    if text.startswith("熱力學地圖") or text.startswith("記憶術地圖"):
+        reply_text = "主題地圖功能即將推出！"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+    
+    elif text.startswith("#今天任務") or text.startswith("#打卡"):
+        reply_text = "任務與打卡功能即將推出！"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+    
+    elif text.startswith("#挑戰"):
+        reply_text = "知識挑戰功能即將推出！"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+    
+    elif text.startswith("#AI"):
+        reply_text = "AI助手功能即將推出！"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+    
+    elif text.startswith("#開始專注") or text.startswith("#專注"):
+        reply_text = "專注模式功能即將推出！"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+    
+    elif text.startswith("#呼叫"):
+        reply_text = "角色助理功能即將推出！"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+    
+    elif text.startswith("/export-report") or text.startswith("#報告"):
+        reply_text = "學習報告功能即將推出！"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+    
+    elif text.startswith("#新增卡") or text.startswith("#卡片"):
+        reply_text = "記憶卡片功能即將推出！"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+    
+    else:
+        # 通用命令處理
+        handle_general_command(line_bot_api, text, user_id, reply_token)
+
+def handle_general_command(line_bot_api, text, user_id, reply_token):
+    """處理通用命令，如幫助、設置等"""
+    from linebot.models import TextSendMessage
+    
+    if text.lower() in ["help", "幫助", "#help", "#幫助"]:
+        help_text = (
+            "📚 學習助手使用指南 📚\n\n"
+            "🗺️ 主題地圖:\n 熱力學地圖、記憶術地圖\n\n"
+            "✅ 任務管理:\n #今天任務、#打卡 [內容] [時間]分鐘\n\n"
+            "🔍 知識挑戰:\n #挑戰 [主題]\n\n"
+            "🤖 AI協助:\n #AI [問題]\n\n"
+            "⏱️ 專注模式:\n #開始專注、#專注 [主題] [時間]分鐘\n\n"
+            "👥 角色協助:\n #呼叫 [角色名稱]\n\n"
+            "📊 學習報告:\n /export-report、#報告\n\n"
+            "🗃️ 記憶卡片:\n #新增卡 [前面]:[後面]、#卡片 [操作]"
+        )
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=help_text))
+    else:
+        reply_text = "🤔 我不確定你想做什麼，請輸入「#幫助」查看可用指令"
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
     # 初始化資料庫（文件）
