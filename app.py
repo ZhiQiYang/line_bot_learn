@@ -7,6 +7,7 @@ import threading
 import logging
 import requests
 import re
+import pytz
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -14,9 +15,13 @@ from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage,
     FlexSendMessage, BubbleContainer, BoxComponent,
     TextComponent, ButtonComponent, SeparatorComponent,
-    URIAction, MessageAction
+    URIAction, MessageAction, RichMenu, RichMenuArea, RichMenuBounds, PostbackAction
 )
 import schedule
+
+# 設置台灣時區環境變數，確保所有時間處理使用相同時區
+os.environ['TZ'] = 'Asia/Taipei'
+time.tzset() if hasattr(time, 'tzset') else None  # Windows 可能沒有 tzset 函數
 
 # 設定日誌
 logging.basicConfig(
@@ -24,6 +29,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# 設置台灣時區
+TIMEZONE = pytz.timezone('Asia/Taipei')
 
 # 初始化 Flask
 app = Flask(__name__)
@@ -110,7 +118,7 @@ def add_task(task_content, reminder_time=None):
     if not data:
         return False
     
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(TIMEZONE)
     
     # 創建新任務
     new_task = {
@@ -152,7 +160,7 @@ def complete_task(task_content):
     for task in data["tasks"]:
         if task["content"] == task_content and not task["completed"]:
             task["completed"] = True
-            task["completed_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            task["completed_at"] = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
             return save_data(TASKS_FILE, data)
     
     return False
@@ -163,7 +171,7 @@ def get_today_progress():
     if not data:
         return 0, 0, 0
     
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    today = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
     total = 0
     completed = 0
     
@@ -187,7 +195,7 @@ def save_reflection(question, answer):
     new_reflection = {
         "question": question,
         "answer": answer,
-        "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "created_at": datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
     }
     
     # 添加到反思列表
@@ -355,7 +363,7 @@ def send_thinking_question(user_id, time_of_day):
 
 # 發送任務提醒
 def send_task_reminder():
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(TIMEZONE)
     current_time = now.strftime("%H:%M")
     
     data = load_data(TASKS_FILE)
@@ -410,7 +418,7 @@ def start_keep_alive_thread():
 
 # 排程任務
 def schedule_jobs():
-    # 早晚定時發送問題
+    # 早晚定時發送問題 (使用台灣時區，而非UTC時區)
     schedule.every().day.at("07:00").do(lambda: send_thinking_question(USER_ID, "morning"))
     schedule.every().day.at("21:00").do(lambda: send_thinking_question(USER_ID, "evening"))
     
@@ -420,6 +428,7 @@ def schedule_jobs():
     # 執行排程任務的線程
     def run_scheduler():
         while True:
+            # 計算下一次運行的作業
             schedule.run_pending()
             time.sleep(1)
     
@@ -441,6 +450,15 @@ def ping():
 @app.route("/", methods=['GET'])
 def health_check():
     return "LINE Bot is running!", 200
+
+# 時區檢查路由
+@app.route("/timezone", methods=['GET'])
+def timezone_check():
+    now_utc = datetime.datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S %Z")
+    now_local = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z")
+    now_taipei = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %Z")
+    
+    return f"UTC時間: {now_utc}\n系統時間: {now_local}\n台灣時間: {now_taipei}", 200
 
 # Flask 路由
 @app.route("/callback", methods=['POST'])
@@ -534,7 +552,7 @@ def handle_text_message(event):
     
     elif text == "反思":
         # 當使用者只輸入「反思」時，提供一個隨機反思問題
-        current_hour = datetime.datetime.now().hour
+        current_hour = datetime.datetime.now(TIMEZONE).hour
         time_of_day = "morning" if 5 <= current_hour < 12 else "evening"
         question = get_random_question(time_of_day)
         
@@ -548,7 +566,7 @@ def handle_text_message(event):
         answer = text[3:].strip()
         
         # 獲取適合當前時間的問題類型
-        current_hour = datetime.datetime.now().hour
+        current_hour = datetime.datetime.now(TIMEZONE).hour
         time_of_day = "morning" if 5 <= current_hour < 12 else "evening"
         question = get_random_question(time_of_day)
         
@@ -629,6 +647,53 @@ def handle_text_message(event):
     if reply_text:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
+# 創建Rich Menu
+def create_rich_menu():
+    rich_menu = RichMenu(
+        size=RichMenuSize(width=2500, height=1686),
+        selected=True,
+        name="任務管理選單",
+        chat_bar_text="點擊查看選單",
+        areas=[
+            RichMenuArea(
+                bounds=RichMenuBounds(x=0, y=0, width=833, height=843),
+                action=MessageAction(label="新增任務", text="新增任務表單")
+            ),
+            RichMenuArea(
+                bounds=RichMenuBounds(x=833, y=0, width=833, height=843),
+                action=MessageAction(label="查詢任務", text="查詢任務")
+            ),
+            RichMenuArea(
+                bounds=RichMenuBounds(x=1666, y=0, width=833, height=843),
+                action=MessageAction(label="今日進度", text="今日進度")
+            ),
+            RichMenuArea(
+                bounds=RichMenuBounds(x=0, y=843, width=833, height=843),
+                action=MessageAction(label="反思", text="反思")
+            ),
+            RichMenuArea(
+                bounds=RichMenuBounds(x=833, y=843, width=833, height=843),
+                action=MessageAction(label="設定計畫", text="設定計畫表單")
+            ),
+            RichMenuArea(
+                bounds=RichMenuBounds(x=1666, y=843, width=833, height=843),
+                action=MessageAction(label="幫助", text="幫助")
+            )
+        ]
+    )
+    
+    # 創建Rich Menu
+    rich_menu_id = line_bot_api.create_rich_menu(rich_menu)
+    
+    # 上傳Rich Menu圖片
+    with open("rich_menu.png", "rb") as f:
+        line_bot_api.set_rich_menu_image(rich_menu_id, "image/png", f)
+    
+    # 設置為默認菜單
+    line_bot_api.set_default_rich_menu(rich_menu_id)
+    
+    return rich_menu_id
+
 if __name__ == "__main__":
     # 初始化資料庫（文件）
     logger.info("正在初始化資料...")
@@ -641,6 +706,13 @@ if __name__ == "__main__":
     # 啟動保活線程
     logger.info("正在啟動保活線程...")
     start_keep_alive_thread()
+    
+    # 創建Rich Menu
+    try:
+        rich_menu_id = create_rich_menu()
+        logger.info(f"Rich Menu 創建成功: {rich_menu_id}")
+    except Exception as e:
+        logger.error(f"Rich Menu 創建失敗: {e}")
     
     # 獲取 Render 指定的端口
     port = int(os.environ.get('PORT', 8080))

@@ -2,8 +2,12 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import logging
+import pytz
 
 logger = logging.getLogger(__name__)
+
+# 設置台灣時區
+TIMEZONE = pytz.timezone('Asia/Taipei')
 
 # 獲取資料庫連接 URL
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -12,6 +16,10 @@ def get_connection():
     """建立並返回資料庫連接"""
     try:
         conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        # 設置資料庫連接的時區為台灣時區
+        cursor = conn.cursor()
+        cursor.execute("SET timezone TO 'Asia/Taipei'")
+        conn.commit()
         return conn
     except Exception as e:
         logger.error(f"資料庫連接錯誤: {e}")
