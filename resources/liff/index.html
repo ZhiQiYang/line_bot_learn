@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>學習助手</title>
+  <title>學習材料</title>
   <!-- LIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <!-- CSS -->
@@ -19,7 +19,7 @@
     <div id="backButton" class="nav-icon">
       <i class="fas fa-arrow-left"></i>
     </div>
-    <div class="page-title">學習儀表板</div>
+    <div class="page-title">學習材料</div>
     <div class="nav-icons">
       <div id="menuButton" class="nav-icon">
         <i class="fas fa-ellipsis-v"></i>
@@ -30,103 +30,61 @@
   <!-- 主要內容 -->
   <div class="main-content">
     <div class="container">
-      <!-- 儀表板統計 -->
-      <div class="stats-container">
-        <div class="stat-card">
-          <div class="stat-value">12</div>
-          <div class="stat-label">學習主題</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">36.5</div>
-          <div class="stat-label">總學習時數</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">86%</div>
-          <div class="stat-label">複習完成率</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">8</div>
-          <div class="stat-label">獲得成就</div>
-        </div>
+      <!-- 搜索框 -->
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="搜索標題、描述或主題...">
+        <button id="searchButton"><i class="fas fa-search"></i></button>
       </div>
 
-      <!-- 今日任務 -->
-      <div class="progress-section">
-        <div class="section-title">
-          <span>今日學習任務</span>
-          <a href="#" class="see-all">查看全部</a>
+      <!-- 主題列表/學習材料列表 切換 -->
+      <div id="viewContainer">
+        <!-- 主題網格 (預設顯示) -->
+        <div id="topicsGrid" class="topics-grid">
+          <!-- 主題卡片將由JS動態生成 -->
+          <div class="loading" id="topicsLoading">載入主題中...</div>
         </div>
-        <div class="learning-cards">
-          <div class="learning-card">
-            <div class="card-title">熱力學基礎</div>
-            <div class="card-description">了解熱力學第一定律和第二定律的核心概念與應用</div>
-            <div class="progress-container">
-              <div class="progress-bar" style="width: 75%;"></div>
-            </div>
-            <div class="progress-info">
-              <span>進度: 75%</span>
-              <span>剩餘: 25分鐘</span>
-            </div>
-            <button class="action-button">繼續學習</button>
-          </div>
-          <div class="learning-card">
-            <div class="card-title">記憶術訓練</div>
-            <div class="card-description">記憶宮殿法和間隔重複系統的實際練習</div>
-            <div class="progress-container">
-              <div class="progress-bar" style="width: 45%;"></div>
-            </div>
-            <div class="progress-info">
-              <span>進度: 45%</span>
-              <span>剩餘: 40分鐘</span>
-            </div>
-            <button class="action-button">繼續學習</button>
-          </div>
-        </div>
-      </div>
 
-      <!-- 最近學習 -->
-      <div class="progress-section">
-        <div class="section-title">
-          <span>最近學習</span>
-          <a href="#" class="see-all">查看全部</a>
-        </div>
-        <div class="learning-cards">
-          <div class="learning-card">
-            <div class="card-title">高等微積分</div>
-            <div class="card-description">多變量微積分與向量分析基礎</div>
-            <div class="progress-container">
-              <div class="progress-bar" style="width: 60%;"></div>
-            </div>
-            <div class="progress-info">
-              <span>進度: 60%</span>
-              <span>上次學習: 昨天</span>
-            </div>
-            <button class="action-button">繼續學習</button>
+        <!-- 特定主題/搜索結果的材料列表 (預設隱藏) -->
+        <div id="materialsList" class="materials-list" style="display: none;">
+          <a href="#" id="backToTopics" class="back-link"><i class="fas fa-arrow-left"></i> 返回主題列表</a>
+          <h2 id="listTitle" class="page-header"></h2>
+          <div id="materialsContainer">
+            <!-- 材料卡片將由JS動態生成 -->
           </div>
-          <div class="learning-card">
-            <div class="card-title">英語口說進階</div>
-            <div class="card-description">商務英語與談判技巧練習</div>
-            <div class="progress-container">
-              <div class="progress-bar" style="width: 85%;"></div>
-            </div>
-            <div class="progress-info">
-              <span>進度: 85%</span>
-              <span>上次學習: 昨天</span>
-            </div>
-            <button class="action-button">查看筆記</button>
+          <div class="loading" id="materialsLoading">載入材料中...</div>
+          <div class="no-data" id="noMaterialsFound" style="display: none;">
+            <i class="fas fa-box-open"></i>
+            <p>找不到相關學習材料。</p>
           </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- 材料詳細資訊模態框 (Modal) -->
+  <div id="materialModal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" onclick="closeModal()">&times;</span>
+      <h3 id="modalTitle"></h3>
+      <p id="modalTopicType"></p>
+      <hr>
+      <h4>描述:</h4>
+      <p id="modalDescription"></p>
+      <div id="modalLinkContainer" style="display: none;">
+        <hr>
+        <h4>連結:</h4>
+        <a id="modalLink" href="#" target="_blank"></a>
+      </div>
+    </div>
+  </div>
+
   <!-- 底部導航 -->
   <div class="bottom-nav">
-    <div class="nav-item active">
+    <div class="nav-item">
       <i class="fas fa-home"></i>
       <span>首頁</span>
     </div>
-    <div class="nav-item">
+    <div class="nav-item active">
       <i class="fas fa-book-open"></i>
       <span>學習</span>
     </div>
