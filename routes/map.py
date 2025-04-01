@@ -1,135 +1,45 @@
-from linebot.models import TextSendMessage, ImageSendMessage, FlexSendMessage
-import os
-import json
+from flask import Blueprint
 import logging
+
+# 創建藍圖
+map_bp = Blueprint('map', __name__)
 
 logger = logging.getLogger(__name__)
 
-# 主題地圖數據
+# 主題地圖數據 (示例)
 MAPS = {
     "熱力學": {
-        "image_url": "https://example.com/thermodynamics_map.jpg",
-        "topics": ["熵", "焓", "自由能", "熱力學第一定律", "熱力學第二定律"],
-        "resources": ["熱力學入門教程", "物理學概論", "能量轉換實例"]
+        "image_url": "", # 實際應提供圖片URL
+        "topics": ["熵", "焓", "自由能"],
+        "resources": ["熱力學入門教程"]
     },
     "記憶術": {
-        "image_url": "https://example.com/memory_techniques_map.jpg",
-        "topics": ["宮殿法", "艾賓浩斯曲線", "間隔重複", "聯想法", "視覺編碼"],
-        "resources": ["超強記憶力訓練", "記憶冠軍的秘密", "快速記憶技巧"]
+        "image_url": "",
+        "topics": ["宮殿法", "艾賓浩斯曲線"],
+        "resources": ["超強記憶力訓練"]
     }
 }
 
-def handle_map_request(line_bot_api, text, user_id, reply_token):
+def handle_map_command(text):
     """處理主題地圖相關請求"""
-    # 提取主題名稱
+    from linebot.models import TextSendMessage # 延遲導入
+
     topic = text.replace("地圖", "").strip()
-    
+
     if topic in MAPS:
-        # 創建主題內容介紹Flex Message
-        flex_content = create_map_flex_message(topic, MAPS[topic])
-        
-        # 回覆消息
-        line_bot_api.reply_message(
-            reply_token,
-            [TextSendMessage(text=f"🗺️ {topic}學習地圖"), flex_content]
-        )
+        # TODO: 實現創建Flex Message的功能
+        # flex_content = create_map_flex_message(topic, MAPS[topic])
+        # 臨時回應
+        response_text = f"🗺️ {topic}學習地圖\n"
+        response_text += "核心知識點:\n" + ", ".join(MAPS[topic]["topics"])
+        response_text += "\n學習資源:\n" + ", ".join(MAPS[topic]["resources"])
+        return response_text # 只返回文本，由 route_message 處理發送
     else:
         available_maps = "、".join(MAPS.keys())
-        line_bot_api.reply_message(
-            reply_token,
-            TextSendMessage(text=f"抱歉，目前沒有「{topic}」的主題地圖。\n可用的地圖有：{available_maps}")
-        )
+        return f"抱歉，目前沒有「{topic}」的主題地圖。\n可用的地圖有：{available_maps}"
 
-def create_map_flex_message(topic, map_data):
-    """創建地圖的Flex消息"""
-    # 建立知識點列表
-    topics_content = []
-    for i, t in enumerate(map_data["topics"]):
-        topics_content.append({
-            "type": "text",
-            "text": f"{i+1}. {t}",
-            "size": "sm",
-            "color": "#1DB446",
-            "wrap": True
-        })
-    
-    # 建立資源列表
-    resources_content = []
-    for i, r in enumerate(map_data["resources"]):
-        resources_content.append({
-            "type": "text",
-            "text": f"📚 {r}",
-            "size": "sm",
-            "color": "#666666",
-            "wrap": True
-        })
-    
-    # 組合成完整Flex Message
-    flex_message = FlexSendMessage(
-        alt_text=f"{topic}學習地圖",
-        contents={
-            "type": "bubble",
-            "header": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": f"{topic}學習地圖",
-                        "weight": "bold",
-                        "size": "xl"
-                    }
-                ]
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "核心知識點",
-                        "weight": "bold",
-                        "margin": "md"
-                    },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "margin": "sm",
-                        "contents": topics_content
-                    },
-                    {
-                        "type": "text",
-                        "text": "學習資源",
-                        "weight": "bold",
-                        "margin": "md"
-                    },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "margin": "sm",
-                        "contents": resources_content
-                    }
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "button",
-                        "action": {
-                            "type": "message",
-                            "label": "進行挑戰",
-                            "text": f"#挑戰 {topic}"
-                        },
-                        "style": "primary"
-                    }
-                ]
-            }
-        }
-    )
-    return flex_message
+# TODO: (可選) 實現 create_map_flex_message 函數來創建更豐富的回應
 
+# 確保至少有一個導出的函數或變量，以避免導入錯誤
 def get_available_maps():
-    """獲取可用的主題地圖列表"""
     return list(MAPS.keys())

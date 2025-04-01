@@ -497,6 +497,26 @@ def handle_text_message(event):
     # 將文本消息轉發到統一路由處理器
     process_message(line_bot_api, text, user_id, event.reply_token)
 
+# 嘗試加載字體，用於繪製 Rich Menu
+# 在Render等環境中可能需要安裝中文字體或提供字體文件路徑
+FONT_PATH = None
+try:
+    # 嘗試常見的中文黑體字體 (Windows)
+    font_path_win = "C:/Windows/Fonts/msyh.ttc" # 微軟雅黑
+    if os.path.exists(font_path_win):
+        FONT_PATH = font_path_win
+    else:
+        # 嘗試常見的中文黑體字體 (Linux/Render)
+        # 可能需要通過 apt-get install fonts-wqy-zenhei 等方式安裝
+        font_path_linux = "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"
+        if os.path.exists(font_path_linux):
+            FONT_PATH = font_path_linux
+        else:
+            # 如果找不到特定字體，嘗試系統預設 (可能不支持中文)
+            logger.warning("找不到指定的中文字體，Rich Menu 上的文字可能無法正確顯示。")
+except Exception as e:
+    logger.warning(f"加載字體時出錯: {e}")
+
 # 創建Rich Menu
 def create_rich_menu():
     rich_menu = RichMenu(
@@ -556,61 +576,82 @@ def test_rich_menu():
     except Exception as e:
         return f"創建Rich Menu時發生錯誤: {str(e)}", 500
 
+# 創建Rich Menu圖片
+def create_rich_menu_image(filename="rich_menu.png", text_enabled=True):
+    """創建2500x1686的Rich Menu圖片"""
+    width, height = 2500, 1686
+    img = Image.new('RGB', (width, height), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    # 繪製網格線和區域
+    # 水平分隔線
+    draw.line([(0, height // 2), (width, height // 2)], fill=(200, 200, 200), width=5)
+    # 垂直分隔線
+    draw.line([(width // 3, 0), (width // 3, height)], fill=(200, 200, 200), width=5)
+    draw.line([(width * 2 // 3, 0), (width * 2 // 3, height)], fill=(200, 200, 200), width=5)
+
+    # 如果啓用了文字且字體可用，則添加文字
+    if text_enabled and FONT_PATH:
+        try:
+            font_size = 80 # 調整字體大小
+            font = ImageFont.truetype(FONT_PATH, font_size)
+
+            menu_items = [
+                ("新增任務", width // 6, height // 4),
+                ("查詢任務", width // 2, height // 4),
+                ("今日進度", width * 5 // 6, height // 4),
+                ("反思", width // 6, height * 3 // 4),
+                ("設定計畫", width // 2, height * 3 // 4),
+                ("幫助", width * 5 // 6, height * 3 // 4)
+            ]
+
+            for text, x_center, y_center in menu_items:
+                # 計算文字寬高以居中
+                try:
+                    # Pillow >= 9.2.0
+                    bbox = font.getbbox(text)
+                    text_width = bbox[2] - bbox[0]
+                    text_height = bbox[3] - bbox[1]
+                except AttributeError:
+                    # Pillow < 9.2.0
+                    text_width, text_height = font.getsize(text)
+
+                x = x_center - text_width // 2
+                y = y_center - text_height // 2
+                draw.text((x, y), text, fill=(50, 50, 50), font=font)
+        except Exception as e:
+            logger.error(f"繪製 Rich Menu 文字時發生錯誤: {e}. 將創建無文字圖片。")
+            # 出錯時可以選擇創建一個沒有文字的圖片
+            img = Image.new('RGB', (width, height), (230, 230, 230)) # 使用不同背景色區分
+            draw = ImageDraw.Draw(img)
+            # 重新繪製分隔線
+            draw.line([(0, height // 2), (width, height // 2)], fill=(200, 200, 200), width=5)
+            draw.line([(width // 3, 0), (width // 3, height)], fill=(200, 200, 200), width=5)
+            draw.line([(width * 2 // 3, 0), (width * 2 // 3, height)], fill=(200, 200, 200), width=5)
+
+    elif not FONT_PATH:
+         logger.info("未找到可用字體，創建無文字 Rich Menu 圖片。")
+         # 可以選擇繪製圖標或簡單圖形代替文字
+
+    try:
+        # 保存圖片
+        img.save(filename)
+        logger.info(f"Rich Menu圖片 '{filename}' 創建成功 (Text enabled: {text_enabled and FONT_PATH is not None})")
+        return filename
+    except Exception as e:
+        logger.error(f"保存Rich Menu圖片 '{filename}' 時發生錯誤: {e}")
+        return None
+
 # 確保Rich Menu圖片存在
 def ensure_rich_menu_image_exists():
-    if not os.path.exists("rich_menu.png"):
+    filename = "rich_menu.png"
+    if not os.path.exists(filename):
         logger.info("正在創建Rich Menu圖片...")
-        return create_rich_menu_image()
-    return "rich_menu.png"
-
-# 創建Rich Menu圖片
-def create_rich_menu_image():
-    """創建2500x1686的Rich Menu圖片"""
-    try:
-        # 創建2500x1686的圖片（標準Rich Menu尺寸）
-        img = Image.new('RGB', (2500, 1686), (255, 255, 255))
-        draw = ImageDraw.Draw(img)
-        
-        # 繪製網格線和區域
-        # 水平分隔線
-        draw.line([(0, 843), (2500, 843)], fill=(200, 200, 200), width=5)
-        
-        # 垂直分隔線
-        draw.line([(833, 0), (833, 1686)], fill=(200, 200, 200), width=5)
-        draw.line([(1666, 0), (1666, 1686)], fill=(200, 200, 200), width=5)
-        
-        # 嘗試加載字體
-        try:
-            font = ImageFont.truetype("Arial.ttf", 60)
-        except IOError:
-            font = ImageFont.load_default()
-        
-        # 添加文字
-        menu_items = [
-            ("新增任務", 416, 421), 
-            ("查詢任務", 1249, 421),
-            ("今日進度", 2082, 421),
-            ("反思", 416, 1264),
-            ("設定計畫", 1249, 1264),
-            ("幫助", 2082, 1264)
-        ]
-        
-        for text, x, y in menu_items:
-            # 計算文字寬度以居中顯示
-            if hasattr(draw, 'textlength'):
-                text_width = draw.textlength(text, font=font)
-            else:  # 對於舊版PIL
-                text_width = font.getsize(text)[0]
-            
-            draw.text((x - text_width // 2, y), text, fill=(50, 50, 50), font=font)
-        
-        # 保存圖片
-        img.save("rich_menu.png")
-        logger.info("Rich Menu圖片創建成功")
-        return "rich_menu.png"
-    except Exception as e:
-        logger.error(f"創建Rich Menu圖片時發生錯誤: {e}")
-        return None
+        # 嘗試創建帶文字的圖片，如果失敗或無字體，則會創建無文字版本
+        return create_rich_menu_image(filename=filename, text_enabled=True)
+    # 如果文件已存在，可以選擇是否重新生成以應用字體更改
+    # return create_rich_menu_image(filename=filename, text_enabled=True)
+    return filename
 
 # 路由處理函數 - 臨時實現
 def process_message(line_bot_api, text, user_id, reply_token):
