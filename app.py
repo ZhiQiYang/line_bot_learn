@@ -20,7 +20,7 @@ from linebot.models import (
 )
 import schedule
 from PIL import Image, ImageDraw, ImageFont
-from routes import task, convert, search, map
+from routes import task, convert, search, map, route_message
 from routes.materials import materials_bp, handle_materials_command
 from utils.rich_menu import preview_rich_menu, preview_gold_rich_menu, create_and_apply_rich_menu, create_and_apply_gold_rich_menu, delete_all_rich_menus
 
@@ -614,12 +614,13 @@ def create_rich_menu_image():
 
 # 路由處理函數 - 臨時實現
 def process_message(line_bot_api, text, user_id, reply_token):
-    # 嘗試處理學習材料相關命令
-    materials_response = handle_materials_command(text)
-    if materials_response:
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=materials_response))
+    # 嘗試使用統一的路由處理函數
+    from routes import route_message
+    
+    # 如果route_message處理了消息，則直接返回
+    if route_message(line_bot_api, text, user_id, reply_token):
         return
-
+    
     # 根據消息前綴決定使用哪個模組處理
     if text.startswith("熱力學地圖") or text.startswith("記憶術地圖"):
         reply_text = "主題地圖功能即將推出！"
