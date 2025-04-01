@@ -15,7 +15,8 @@ from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage,
     FlexSendMessage, BubbleContainer, BoxComponent,
     TextComponent, ButtonComponent, SeparatorComponent,
-    URIAction, MessageAction, RichMenu, RichMenuArea, RichMenuBounds, PostbackAction
+    URIAction, MessageAction, RichMenu, RichMenuArea, RichMenuBounds, PostbackAction,
+    RichMenuSize
 )
 import schedule
 from PIL import Image, ImageDraw, ImageFont
@@ -487,7 +488,127 @@ def handle_text_message(event):
     user_id = event.source.user_id
     
     # 指令處理
-    if text.startswith("新增：") or text.startswith("新增:"):
+    if text == "新增任務表單":
+        flex_message = FlexSendMessage(
+            alt_text="新增任務",
+            contents={
+                "type": "bubble",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "新增任務",
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#000000"
+                        }
+                    ]
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "請選擇想要創建的任務類型",
+                            "wrap": True
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "message",
+                                "label": "一般任務",
+                                "text": "新增：[在此輸入任務內容]"
+                            },
+                            "style": "primary"
+                        },
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "message",
+                                "label": "定時提醒任務",
+                                "text": "新增：[在此輸入任務內容] @08:00"
+                            },
+                            "style": "secondary",
+                            "margin": "md"
+                        }
+                    ]
+                }
+            }
+        )
+        line_bot_api.reply_message(event.reply_token, flex_message)
+        return
+        
+    elif text == "設定計畫表單":
+        flex_message = FlexSendMessage(
+            alt_text="設定每日計畫",
+            contents={
+                "type": "bubble",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "設定每日計畫",
+                            "weight": "bold",
+                            "size": "xl",
+                            "color": "#000000"
+                        }
+                    ]
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "請選擇計畫模板或自行輸入",
+                            "wrap": True
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "message",
+                                "label": "基本日程模板",
+                                "text": "設定計畫：{\"早上\":\"晨間閱讀\",\"中午\":\"午餐後散步\",\"下午\":\"工作/學習\",\"晚上\":\"反思與計劃\"}"
+                            },
+                            "style": "primary"
+                        },
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "message",
+                                "label": "學習日程模板",
+                                "text": "設定計畫：{\"早上\":\"重點科目學習\",\"中午\":\"複習筆記\",\"下午\":\"練習題\",\"晚上\":\"總結今日所學\"}"
+                            },
+                            "style": "secondary",
+                            "margin": "md"
+                        }
+                    ]
+                }
+            }
+        )
+        line_bot_api.reply_message(event.reply_token, flex_message)
+        return
+    
+    elif text.startswith("新增：") or text.startswith("新增:"):
         content = text[3:].strip()
         
         # 檢查是否有提醒時間設置（格式：任務內容 @HH:MM）
@@ -601,6 +722,8 @@ def handle_text_message(event):
             "• 反思 - 獲取一個反思問題\n"
             "• 反思：[內容] - 記錄你的反思\n"
             "• 設定計畫：{JSON格式} - 設定每日計畫\n"
+            "• 新增任務表單 - 開啟任務新增界面\n"
+            "• 設定計畫表單 - 開啟計畫設定界面\n"
             "• 模板 - 獲取可複製的功能模板"
         )
 
@@ -707,10 +830,72 @@ def test_rich_menu():
     except Exception as e:
         return f"創建Rich Menu時發生錯誤: {str(e)}", 500
 
+# 確保Rich Menu圖片存在
+def ensure_rich_menu_image_exists():
+    if not os.path.exists("rich_menu.png"):
+        logger.info("正在創建Rich Menu圖片...")
+        return create_rich_menu_image()
+    return "rich_menu.png"
+
+# 創建Rich Menu圖片
+def create_rich_menu_image():
+    """創建2500x1686的Rich Menu圖片"""
+    try:
+        # 創建2500x1686的圖片（標準Rich Menu尺寸）
+        img = Image.new('RGB', (2500, 1686), (255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        
+        # 繪製網格線和區域
+        # 水平分隔線
+        draw.line([(0, 843), (2500, 843)], fill=(200, 200, 200), width=5)
+        
+        # 垂直分隔線
+        draw.line([(833, 0), (833, 1686)], fill=(200, 200, 200), width=5)
+        draw.line([(1666, 0), (1666, 1686)], fill=(200, 200, 200), width=5)
+        
+        # 嘗試加載字體
+        try:
+            font = ImageFont.truetype("Arial.ttf", 60)
+        except IOError:
+            font = ImageFont.load_default()
+        
+        # 添加文字
+        menu_items = [
+            ("新增任務", 416, 421), 
+            ("查詢任務", 1249, 421),
+            ("今日進度", 2082, 421),
+            ("反思", 416, 1264),
+            ("設定計畫", 1249, 1264),
+            ("幫助", 2082, 1264)
+        ]
+        
+        for text, x, y in menu_items:
+            # 計算文字寬度以居中顯示
+            if hasattr(draw, 'textlength'):
+                text_width = draw.textlength(text, font=font)
+            else:  # 對於舊版PIL
+                text_width = font.getsize(text)[0]
+            
+            draw.text((x - text_width // 2, y), text, fill=(50, 50, 50), font=font)
+        
+        # 保存圖片
+        img.save("rich_menu.png")
+        logger.info("Rich Menu圖片創建成功")
+        return "rich_menu.png"
+    except Exception as e:
+        logger.error(f"創建Rich Menu圖片時發生錯誤: {e}")
+        return None
+
 if __name__ == "__main__":
     # 初始化資料庫（文件）
     logger.info("正在初始化資料...")
     init_db()
+    
+    # 確保Rich Menu圖片存在
+    logger.info("確認Rich Menu圖片...")
+    rich_menu_image = ensure_rich_menu_image_exists()
+    if not rich_menu_image:
+        logger.warning("無法創建Rich Menu圖片，Rich Menu功能可能不可用")
     
     # 啟動排程任務
     logger.info("正在啟動排程任務...")
@@ -722,8 +907,9 @@ if __name__ == "__main__":
     
     # 創建Rich Menu
     try:
-        rich_menu_id = create_rich_menu()
-        logger.info(f"Rich Menu 創建成功: {rich_menu_id}")
+        if rich_menu_image:
+            rich_menu_id = create_rich_menu()
+            logger.info(f"Rich Menu 創建成功: {rich_menu_id}")
     except Exception as e:
         logger.error(f"Rich Menu 創建失敗: {e}")
     
