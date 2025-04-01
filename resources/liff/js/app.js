@@ -49,6 +49,18 @@ function initEventListeners() {
     });
   });
   
+  // 在頂部導航欄添加學習材料按鈕
+  const topNav = document.querySelector('.top-nav .nav-icons');
+  if (topNav) {
+    const materialsButton = document.createElement('div');
+    materialsButton.className = 'nav-icon';
+    materialsButton.innerHTML = '<i class="fas fa-book"></i>';
+    materialsButton.addEventListener('click', function() {
+      window.location.href = '?feature=materials';
+    });
+    topNav.prepend(materialsButton);
+  }
+  
   // 卡片點擊事件
   const learningCards = document.querySelectorAll('.learning-card');
   learningCards.forEach(card => {

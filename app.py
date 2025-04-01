@@ -21,6 +21,7 @@ from linebot.models import (
 import schedule
 from PIL import Image, ImageDraw, ImageFont
 from routes import task, convert, search, map
+from routes.materials import materials_bp, handle_materials_command
 
 # 設置台灣時區環境變數，確保所有時間處理使用相同時區
 os.environ['TZ'] = 'Asia/Taipei'
@@ -42,6 +43,9 @@ app = Flask(__name__)
 # 添加靜態資源路由
 app.static_folder = 'resources'
 app.static_url_path = '/resources'
+
+# 註冊藍圖
+app.register_blueprint(materials_bp)
 
 # 從環境變數獲取配置
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
@@ -609,6 +613,12 @@ def create_rich_menu_image():
 
 # 路由處理函數 - 臨時實現
 def process_message(line_bot_api, text, user_id, reply_token):
+    # 嘗試處理學習材料相關命令
+    materials_response = handle_materials_command(text)
+    if materials_response:
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=materials_response))
+        return
+
     # 根據消息前綴決定使用哪個模組處理
     if text.startswith("熱力學地圖") or text.startswith("記憶術地圖"):
         reply_text = "主題地圖功能即將推出！"
@@ -662,6 +672,7 @@ def handle_general_command(line_bot_api, text, user_id, reply_token):
         "⏱️ 專注模式:\n #開始專注、#專注 [主題] [時間]分鐘\n\n"
         "📊 學習分析:\n #報告 [日/週/月]\n\n"
         "🏆 設定目標:\n #目標 [描述] [日期]\n\n"
+        "📚 學習材料:\n #材料、#材料 [主題]、#推薦材料\n\n"
     )
     
     if text.lower() in ["help", "幫助", "#help", "#幫助"]:
