@@ -8,7 +8,7 @@ import logging
 import requests
 import re
 import pytz
-from flask import Flask, request, abort
+from flask import Flask, request, abort, render_template
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -20,6 +20,7 @@ from linebot.models import (
 )
 import schedule
 from PIL import Image, ImageDraw, ImageFont
+from routes import task, convert, search, map
 
 # 設置台灣時區環境變數，確保所有時間處理使用相同時區
 os.environ['TZ'] = 'Asia/Taipei'
@@ -37,6 +38,10 @@ TIMEZONE = pytz.timezone('Asia/Taipei')
 
 # 初始化 Flask
 app = Flask(__name__)
+
+# 添加靜態資源路由
+app.static_folder = 'resources'
+app.static_url_path = '/resources'
 
 # 從環境變數獲取配置
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
@@ -645,22 +650,30 @@ def handle_general_command(line_bot_api, text, user_id, reply_token):
     """處理通用命令，如幫助、設置等"""
     from linebot.models import TextSendMessage
     
+    HELP_TEXT = (
+        "📚 學習助手指令：\n\n"
+        "ℹ️ 功能說明:\n #幫助、#help\n\n"
+        "🔄 時區轉換:\n #時區轉換 [時間] [原時區] to [目標時區]\n\n"
+        "🔍 搜尋解釋:\n #搜尋 [關鍵詞]\n\n"
+        "🗺️ 主題地圖:\n 熱力學地圖、記憶術地圖\n\n"
+        "✅ 任務管理:\n #今天任務、#打卡 [內容] [時間]分鐘\n\n"
+        "🔍 知識挑戰:\n #挑戰 [主題]\n\n"
+        "🤖 AI協助:\n #AI [問題]\n\n"
+        "⏱️ 專注模式:\n #開始專注、#專注 [主題] [時間]分鐘\n\n"
+        "📊 學習分析:\n #報告 [日/週/月]\n\n"
+        "🏆 設定目標:\n #目標 [描述] [日期]\n\n"
+    )
+    
     if text.lower() in ["help", "幫助", "#help", "#幫助"]:
-        help_text = (
-            "📚 學習助手使用指南 📚\n\n"
-            "🗺️ 主題地圖:\n 熱力學地圖、記憶術地圖\n\n"
-            "✅ 任務管理:\n #今天任務、#打卡 [內容] [時間]分鐘\n\n"
-            "🔍 知識挑戰:\n #挑戰 [主題]\n\n"
-            "🤖 AI協助:\n #AI [問題]\n\n"
-            "⏱️ 專注模式:\n #開始專注、#專注 [主題] [時間]分鐘\n\n"
-            "👥 角色協助:\n #呼叫 [角色名稱]\n\n"
-            "📊 學習報告:\n /export-report、#報告\n\n"
-            "🗃️ 記憶卡片:\n #新增卡 [前面]:[後面]、#卡片 [操作]"
-        )
-        line_bot_api.reply_message(reply_token, TextSendMessage(text=help_text))
+        line_bot_api.reply_message(reply_token, TextSendMessage(text=HELP_TEXT))
     else:
         reply_text = "🤔 我不確定你想做什麼，請輸入「#幫助」查看可用指令"
         line_bot_api.reply_message(reply_token, TextSendMessage(text=reply_text))
+
+# LIFF頁面路由
+@app.route('/liff')
+def liff_page():
+    return render_template('liff.html')
 
 if __name__ == "__main__":
     # 初始化資料庫（文件）

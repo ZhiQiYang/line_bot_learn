@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>學習助手 - LIFF</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            text-align: center;
+        }
+        .container {
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 {
+            color: #00c300;
+        }
+        p {
+            margin: 20px 0;
+            color: #333;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #00c300;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        .loading {
+            margin-top: 20px;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+    <script>
+        // 重定向到LIFF頁面
+        window.onload = function() {
+            // 3秒後重定向
+            setTimeout(function() {
+                window.location.href = '/resources/liff/index.html';
+            }, 3000);
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>學習助手</h1>
+        <p>歡迎使用學習助手 LIFF 應用！</p>
+        <p>此頁面將自動跳轉到 LIFF 應用畫面。</p>
+        <p>若沒有自動跳轉，請點擊下方按鈕：</p>
+        <a href="/resources/liff/index.html" class="btn">進入 LIFF 應用</a>
+        <div class="loading">正在載入，請稍候...</div>
+    </div>
+</body>
+</html> 
