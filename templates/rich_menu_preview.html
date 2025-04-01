@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rich Menu 預覽與管理</title>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif, Arial;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #00c300;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .rich-menu-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+        .rich-menu-card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 500px;
+        }
+        .rich-menu-card h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            color: #00c300;
+        }
+        .preview-image {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .action-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background-color: #00c300;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #00a000;
+        }
+        .btn-danger {
+            background-color: #ff4b4b;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #e03c3c;
+        }
+        .response-message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .note {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 40px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #00c300;
+        }
+    </style>
+</head>
+<body>
+    <h1>LINE Bot Rich Menu 預覽與管理</h1>
+    
+    <div class="rich-menu-container">
+        <div class="rich-menu-card">
+            <h2>簡約線條風格</h2>
+            <img src="/resources/images/rich_menu_preview.png" alt="簡約風格Rich Menu預覽" class="preview-image">
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="applyRichMenu('minimal')">套用此Rich Menu</button>
+            </div>
+            <div id="minimal-response" class="response-message"></div>
+        </div>
+        
+        <div class="rich-menu-card">
+            <h2>金色主題風格</h2>
+            <img src="/resources/images/rich_menu_gold_preview.png" alt="金色風格Rich Menu預覽" class="preview-image">
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="applyRichMenu('gold')">套用此Rich Menu</button>
+            </div>
+            <div id="gold-response" class="response-message"></div>
+        </div>
+    </div>
+    
+    <div class="action-buttons">
+        <button class="btn btn-danger" onclick="deleteAllRichMenus()">刪除所有Rich Menu</button>
+    </div>
+    <div id="delete-response" class="response-message"></div>
+    
+    <div class="note">
+        <p><strong>注意事項：</strong></p>
+        <ul>
+            <li>套用Rich Menu前請確保已設置LINE_CHANNEL_ACCESS_TOKEN環境變數</li>
+            <li>Rich Menu套用後可能需要幾分鐘才會在LINE應用中顯示</li>
+            <li>每個LINE Bot只能有一個默認Rich Menu</li>
+            <li>刪除所有Rich Menu後，用戶將不會看到任何Rich Menu</li>
+        </ul>
+    </div>
+    
+    <script>
+        function applyRichMenu(style) {
+            const endpoint = style === 'minimal' ? '/admin/rich-menu/apply-minimal' : '/admin/rich-menu/apply-gold';
+            const responseElement = document.getElementById(`${style}-response`);
+            
+            // 顯示正在處理的消息
+            responseElement.textContent = '正在套用Rich Menu，請稍候...';
+            responseElement.className = 'response-message';
+            responseElement.style.display = 'block';
+            
+            fetch(endpoint, {
+                method: 'POST',
+            })
+            .then(response => response.text())
+            .then(result => {
+                responseElement.textContent = result;
+                responseElement.className = 'response-message success';
+            })
+            .catch(error => {
+                responseElement.textContent = `錯誤：${error.message}`;
+                responseElement.className = 'response-message error';
+            });
+        }
+        
+        function deleteAllRichMenus() {
+            const responseElement = document.getElementById('delete-response');
+            
+            // 顯示正在處理的消息
+            responseElement.textContent = '正在刪除所有Rich Menu，請稍候...';
+            responseElement.className = 'response-message';
+            responseElement.style.display = 'block';
+            
+            fetch('/admin/rich-menu/delete-all', {
+                method: 'POST',
+            })
+            .then(response => response.text())
+            .then(result => {
+                responseElement.textContent = result;
+                responseElement.className = 'response-message success';
+            })
+            .catch(error => {
+                responseElement.textContent = `錯誤：${error.message}`;
+                responseElement.className = 'response-message error';
+            });
+        }
+    </script>
+</body>
+</html> 

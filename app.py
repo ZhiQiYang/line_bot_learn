@@ -22,6 +22,7 @@ import schedule
 from PIL import Image, ImageDraw, ImageFont
 from routes import task, convert, search, map
 from routes.materials import materials_bp, handle_materials_command
+from utils.rich_menu import preview_rich_menu, preview_gold_rich_menu, create_and_apply_rich_menu, create_and_apply_gold_rich_menu, delete_all_rich_menus
 
 # 設置台灣時區環境變數，確保所有時間處理使用相同時區
 os.environ['TZ'] = 'Asia/Taipei'
@@ -685,6 +686,30 @@ def handle_general_command(line_bot_api, text, user_id, reply_token):
 @app.route('/liff')
 def liff_page():
     return render_template('liff.html')
+
+# Rich Menu預覽和管理路由
+@app.route('/admin/rich-menu/preview')
+def rich_menu_preview():
+    preview_path = preview_rich_menu()
+    gold_preview_path = preview_gold_rich_menu()
+    return render_template('rich_menu_preview.html', 
+                           minimal_preview=preview_path, 
+                           gold_preview=gold_preview_path)
+
+@app.route('/admin/rich-menu/apply-minimal', methods=['POST'])
+def apply_minimal_rich_menu():
+    result = create_and_apply_rich_menu()
+    return result
+
+@app.route('/admin/rich-menu/apply-gold', methods=['POST'])
+def apply_gold_rich_menu():
+    result = create_and_apply_gold_rich_menu()
+    return result
+
+@app.route('/admin/rich-menu/delete-all', methods=['POST'])
+def remove_all_rich_menus():
+    result = delete_all_rich_menus()
+    return result
 
 if __name__ == "__main__":
     # 初始化資料庫（文件）
