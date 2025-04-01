@@ -18,6 +18,7 @@ from linebot.models import (
     URIAction, MessageAction, RichMenu, RichMenuArea, RichMenuBounds, PostbackAction
 )
 import schedule
+from PIL import Image, ImageDraw, ImageFont
 
 # 設置台灣時區環境變數，確保所有時間處理使用相同時區
 os.environ['TZ'] = 'Asia/Taipei'
@@ -693,6 +694,18 @@ def create_rich_menu():
     line_bot_api.set_default_rich_menu(rich_menu_id)
     
     return rich_menu_id
+
+# 測試Rich Menu創建
+@app.route("/test_rich_menu", methods=['GET'])
+def test_rich_menu():
+    try:
+        create_rich_menu_image()
+        
+        # 創建Rich Menu
+        rich_menu_id = create_rich_menu()
+        return f"Rich Menu創建成功，ID: {rich_menu_id}", 200
+    except Exception as e:
+        return f"創建Rich Menu時發生錯誤: {str(e)}", 500
 
 if __name__ == "__main__":
     # 初始化資料庫（文件）
